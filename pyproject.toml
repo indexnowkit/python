@@ -18,6 +18,7 @@ dev = [
   "jsonschema>=4.23",
   "types-jsonschema>=4.23",
   "twine>=6.0",
+  "httpx>=0.28,<2",   # the httpx extra of the core, tested here
 ]
 docs = [
   "mkdocs-material>=9.5,<10",
@@ -48,9 +49,10 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "packages/*/tests/**" = ["S101", "S105", "S106", "S108", "RUF043"]   # assert, literal keys, /tmp paths and dotted option names in match= are what tests are made of
 "bin/**" = ["S603", "S607"]                               # the scripts call the tools they wrap
+"packages/indexnowkit/src/indexnowkit/http/_transport.py" = ["S310"]   # urllib is the transport; the scheme is checked before every open()
 
 [tool.ruff.lint.isort]
-known-first-party = ["indexnowkit"]
+known-first-party = ["indexnowkit", "tests"]
 
 # ---- mypy --strict over the sources and the tests of every member (spec 26 §5.1) ----
 [tool.mypy]
@@ -59,6 +61,6 @@ strict = true
 warn_unreachable = true
 enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
 files = ["packages/*/src", "packages/*/tests", "bin/lib/*.py"]
-mypy_path = "packages/indexnowkit/src"
+mypy_path = "packages/indexnowkit/src:packages/indexnowkit"
 explicit_package_bases = true
 namespace_packages = true

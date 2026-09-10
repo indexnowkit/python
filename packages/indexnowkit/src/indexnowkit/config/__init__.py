@@ -181,9 +181,7 @@ class Config:
         if self.previous_key is not None:
             KeyValidator.assert_valid(self.previous_key)
         s("logging_levels", norm.log_levels(self.logging_levels, LOG_EVENTS, LOG_LEVELS))
-        _at_least(
-            "resolver.max_via_depth", self.resolver_max_via_depth, 0, " (0 = rules may not follow `via:` at all)"
-        )
+        _at_least("resolver.max_via_depth", self.resolver_max_via_depth, 0, " (0 = rules may not follow `via:` at all)")
         _at_least(
             "resolver.max_via_fanout", self.resolver_max_via_fanout, 1, " (related objects one `via:` hop may yield)"
         )

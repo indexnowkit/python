@@ -715,6 +715,7 @@ source = { virtual = "." }
 [package.dev-dependencies]
 dev = [
     { name = "coverage", extra = ["toml"] },
+    { name = "httpx" },
     { name = "hypothesis" },
     { name = "jsonschema" },
     { name = "mypy" },
@@ -733,6 +734,7 @@ docs = [
 [package.metadata.requires-dev]
 dev = [
     { name = "coverage", extras = ["toml"], specifier = ">=7.6" },
+    { name = "httpx", specifier = ">=0.28,<2" },
     { name = "hypothesis", specifier = ">=6.100" },
     { name = "jsonschema", specifier = ">=4.23" },
     { name = "mypy", specifier = "==2.3.1" },

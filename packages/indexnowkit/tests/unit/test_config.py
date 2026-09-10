@@ -96,7 +96,7 @@ def test_hosts_entries_are_unpacked_and_lower_cased() -> None:
         ({"hosts": {"x.example": {"key": KEY, "engines": []}}}, "must list at least one engine"),
         ({"base_url": "www.example.com"}, r'"base_url" must be an absolute http\(s\) URL'),
         ({"key_location": "https://www.example.com/"}, r'"key_location" must be an absolute http\(s\) URL to the key'),
-        ({"key_location": "https://other.example/k.txt"}, "must be on the host of \"base_url\""),
+        ({"key_location": "https://other.example/k.txt"}, 'must be on the host of "base_url"'),
         ({"batch": {"max_urls": 0}}, '"batch.max_urls" must be between 1 and 10000'),
         ({"batch": {"max_urls": 10001}}, '"batch.max_urls" must be between 1 and 10000'),
         ({"debounce": {"per_url": -1}}, '"debounce.per_url" must be >= 0'),
