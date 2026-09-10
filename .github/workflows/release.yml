@@ -39,7 +39,7 @@ jobs:
           module="$(echo "$dist" | tr - _)"
           grep -Eq "^__version__ = \"${version//./\\.}\"$" "packages/$dist/src/$module/__init__.py" || { echo "::error::packages/$dist/src/$module/__init__.py does not say __version__ = \"$version\""; exit 1; }
           { echo "short=$short"; echo "dist=$dist"; echo "version=$version"; } >> "$GITHUB_OUTPUT"
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: '3.12'
       - name: Build
