@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Build the sdist and the wheel of one package the way release.yml does (uv build --no-sources: the workspace sources
+# are ignored, so the package must resolve from PyPI alone), check the metadata with twine, install the wheel into a
+# clean environment and import the module — the smoke of spec 26 §5.6.
+# Usage: bin/build <package>     the artifacts land in packages/<package>/dist/
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=lib/package.sh
+source "$ROOT/bin/lib/package.sh"
+pkg="${1:?usage: bin/build <package>}"
+[ -d "$ROOT/packages/$pkg" ] || { echo "build: no package packages/$pkg" >&2; exit 1; }
+module="$(module_of "$pkg")"
+rm -rf "$ROOT/packages/$pkg/dist"
+"$ROOT/bin/uv" build --package "$pkg" --no-sources --out-dir "packages/$pkg/dist"
+"$ROOT/bin/uv" run --frozen twine check --strict "packages/$pkg/dist/"*
+# a clean environment on the image's Python: the wheel and nothing of the workspace
+"$ROOT/bin/uv" run --no-project --isolated --with "packages/$pkg/dist/$module-"*.whl \
+    python -c "import $module; print('$module', getattr($module, '__version__', '?'), 'imports from', $module.__file__)"
+# the console script of the core
+if [ "$pkg" = indexnowkit ]; then
+    "$ROOT/bin/uv" run --no-project --isolated --with "packages/$pkg/dist/$module-"*.whl indexnowkit --version
+fi

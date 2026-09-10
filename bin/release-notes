@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Print the <version> section of a package CHANGELOG as GitHub release notes: relative links become absolute links
+# into indexnowkit/python at that tag. release.yml uses it to create the release after the PyPI upload; with --create,
+# the release is created (or its notes replaced) through the gh CLI from a maintainer's machine.
+#
+# Usage: bin/release-notes <short> <version> [--create]     bin/release-notes core 0.1.0 --create
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=lib/package.sh
+source "$ROOT/bin/lib/package.sh"
+short="${1:?usage: bin/release-notes <short> <version> [--create]}"
+ver="${2:?usage: bin/release-notes <short> <version> [--create]}"
+create="${3:-}"
+dist="$(dist_of "$short")"
+tag="${short}@${ver}"
+changelog="$ROOT/packages/$dist/CHANGELOG.md"
+repo="indexnowkit/python"
+[ -f "$changelog" ] || { echo "release-notes: no $changelog" >&2; exit 1; }
+body="$(awk -v ver="$ver" '
+    /^## / { if (found) exit; found = ($0 ~ "^## \\[?" ver "\\]? — [0-9-]+$") ; next }
+    found { print }
+' "$changelog" | sed '/./,$!d' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}')"
+[ -n "$body" ] || { echo "release-notes: $changelog has no section '## [$ver] — YYYY-MM-DD'" >&2; exit 1; }
+body="$(printf '%s\n' "$body" | perl -pe "s{\]\((?!https?://)([^)]+)\)}{](https://github.com/$repo/blob/$tag/packages/$dist/\$1)}g")"
+body="$(printf '%s\n\nPyPI: https://pypi.org/project/%s/%s/\n' "$body" "$dist" "$ver")"
+if [ "$create" = "--create" ]; then
+    if gh release view "$tag" -R "$repo" >/dev/null 2>&1; then
+        printf '%s\n' "$body" | gh release edit "$tag" -R "$repo" -t "$dist $ver" -F -
+        echo "release $tag exists on $repo: notes replaced"
+    else
+        printf '%s\n' "$body" | gh release create "$tag" -R "$repo" -t "$dist $ver" --verify-tag -F -
+        echo "release $tag created on $repo"
+    fi
+else
+    printf '%s\n' "$body"
+fi

@@ -1,0 +1,36 @@
+# Template for docs-site/mkdocs.yml: bin/docs-collect replaces the NAV placeholder line with the generated navigation and writes the
+# real mkdocs.yml next to this file (both docs/ and mkdocs.yml are generated, not committed).
+site_name: indexnowkit for Python
+site_description: IndexNow for Python — core client plus Django, SQLAlchemy, FastAPI, Flask and Wagtail adapters
+site_url: https://indexnowkit.dev/python/
+repo_url: https://github.com/indexnowkit/python
+repo_name: indexnowkit/python
+edit_uri: ""
+docs_dir: docs
+strict: true
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+  palette:
+    - scheme: default
+      primary: teal
+      toggle: { icon: material/brightness-7, name: Dark mode }
+    - scheme: slate
+      primary: teal
+      toggle: { icon: material/brightness-4, name: Light mode }
+markdown_extensions:
+  - tables
+  - toc: { permalink: true }
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - admonition
+plugins:
+  - search
+nav:
+#NAV#

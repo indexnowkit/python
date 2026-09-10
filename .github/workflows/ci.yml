@@ -1,0 +1,109 @@
+name: CI
+
+# The gate of spec 26 §5 on the matrix: every package on Python 3.11–3.14 with the committed lock (3.15 while it is a
+# release candidate: experimental, may fail), the oldest direct dependencies on 3.11 (lowest-direct), ruff, mypy
+# --strict, pytest under coverage; the coverage floor of each package is compared in the reference cell (3.12, highest —
+# the number recorded in tests/coverage-floor.txt is the one this cell measures); the distributions build without the
+# workspace sources, pass twine and install into a clean environment. bin/ci runs the same steps in Docker.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: ${{ matrix.package }} / Python ${{ matrix.python }} / ${{ matrix.deps }}
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental || false }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [indexnowkit]
+        python: ['3.11', '3.12', '3.13', '3.14']
+        deps: [highest]
+        include:
+          - { package: indexnowkit, python: '3.11', deps: lowest }
+          - { package: indexnowkit, python: '3.15', deps: highest, experimental: true }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+          cache-suffix: ${{ matrix.deps }}
+      - name: The lock is current
+        run: uv lock --check
+      - name: Sync (${{ matrix.deps }})
+        run: |
+          if [ "${{ matrix.deps }}" = lowest ]; then
+            uv sync --all-packages --all-groups --resolution lowest-direct --upgrade
+          else
+            uv sync --all-packages --all-groups --frozen
+          fi
+      - run: uv run --no-sync ruff check
+      - run: uv run --no-sync ruff format --check
+      - run: uv run --no-sync mypy
+      - name: pytest under coverage
+        working-directory: packages/${{ matrix.package }}
+        run: uv run --no-sync coverage run -m pytest
+      - name: Coverage
+        working-directory: packages/${{ matrix.package }}
+        run: uv run --no-sync coverage report --precision=2 | tee -a "$GITHUB_STEP_SUMMARY"
+      # the floor is the coverage measured in this cell when it was set (tests/coverage-floor.txt); below it the job fails
+      - name: Coverage floor
+        if: matrix.python == '3.12' && matrix.deps == 'highest'
+        working-directory: packages/${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          floor_file=tests/coverage-floor.txt
+          if [ ! -f "$floor_file" ]; then echo "::warning::no coverage floor recorded for ${{ matrix.package }} (packages/${{ matrix.package }}/tests/coverage-floor.txt)"; exit 0; fi
+          current="$(uv run --no-sync coverage report --format=total --precision=2)"
+          floor="$(tr -d '[:space:]' < "$floor_file")"
+          echo "coverage ${current}% (floor ${floor}%)"
+          awk -v c="$current" -v f="$floor" 'BEGIN { exit (c + 0 < f + 0) }' || { echo "::error::line coverage ${current}% is below the floor ${floor}%"; exit 1; }
+      # the generated table of docs/configuration.md must match Config.OPTIONS (bin/lib/config_table.py --check)
+      - name: Configuration table
+        if: matrix.python == '3.12' && matrix.deps == 'highest'
+        run: |
+          if grep -q '<!-- config-table:start -->' packages/${{ matrix.package }}/docs/configuration.md 2>/dev/null; then
+            uv run --no-sync python bin/lib/config_table.py ${{ matrix.package }} --check
+          else
+            echo "no generated configuration table in packages/${{ matrix.package }}/docs/configuration.md yet"
+          fi
+
+  build:
+    name: build / ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [indexnowkit]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: '3.12'
+          enable-cache: true
+      - name: Build without the workspace sources (what release.yml ships)
+        run: uv build --package ${{ matrix.package }} --no-sources --out-dir dist
+      - run: uv run --only-group dev twine check --strict dist/*
+      - name: The wheel installs into a clean environment and imports
+        run: |
+          set -euo pipefail
+          module="$(echo '${{ matrix.package }}' | tr - _)"
+          uv venv /tmp/smoke
+          uv pip install --python /tmp/smoke/bin/python dist/*.whl
+          /tmp/smoke/bin/python -c "import $module; print('$module', $module.__version__, $module.__file__)"
+          if [ "${{ matrix.package }}" = indexnowkit ]; then /tmp/smoke/bin/indexnowkit --version; fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-${{ matrix.package }}
+          path: dist/

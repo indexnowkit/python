@@ -1,0 +1,45 @@
+name: Bug report
+description: Something an indexnowkit package does wrong
+labels: [bug]
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      options:
+        - indexnowkit (core, CLI)
+        - indexnowkit-django
+        - indexnowkit-sqlalchemy
+        - indexnowkit-fastapi
+        - indexnowkit-flask
+        - indexnowkit-wagtail
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      description: "`pip show indexnowkit` (or the adapter)"
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: framework
+    attributes:
+      label: Framework and Python version
+      placeholder: Django 5.2.17 / SQLAlchemy 2.0.52 / FastAPI 0.141, Python 3.12.14
+    validations:
+      required: true
+  - type: textarea
+    id: check
+    attributes:
+      label: Output of the check command
+      description: "`indexnowkit check`, `python manage.py indexnow_check` or `flask indexnow check`. Keys are masked by the command; do not paste a full key."
+      render: text
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens, what you expected
+      description: The model, the rule declaration, the event (create, update, delete), the log lines (`indexnowkit.*` loggers at DEBUG), the result.
+    validations:
+      required: true

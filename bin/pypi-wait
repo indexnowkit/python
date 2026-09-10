@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Poll PyPI until <distribution> <version> is there: the adapters of a release wave are tagged only once the core
+# version they require is installable from PyPI (spec 26 §6), otherwise their release build resolves nothing.
+#
+# Usage: bin/pypi-wait <short> <version> [max_seconds]     bin/pypi-wait core 0.1.0
+# Exit 0 when the version is visible, 1 after max_seconds (default 600). Polls every 15 s.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=lib/package.sh
+source "$ROOT/bin/lib/package.sh"
+short="${1:?usage: bin/pypi-wait <short> <version> [max_seconds]}"
+ver="${2:?usage: bin/pypi-wait <short> <version> [max_seconds]}"
+max="${3:-600}"
+dist="$(dist_of "$short")"
+url="https://pypi.org/pypi/${dist}/${ver}/json"
+t=0
+while :; do
+    if curl -fsS -o /dev/null "$url"; then
+        echo "pypi: $dist $ver available after ${t}s ($url)"
+        exit 0
+    fi
+    if [ "$t" -ge "$max" ]; then
+        echo "pypi: $dist $ver NOT visible after ${max}s ($url)" >&2
+        exit 1
+    fi
+    sleep 15
+    t=$((t + 15))
+done

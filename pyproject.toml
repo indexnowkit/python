@@ -1,0 +1,64 @@
+# The uv workspace of the indexnowkit Python family (spec 26 §6): one lock, one environment, the packages under
+# packages/*. This root is not a distribution (package = false); the tooling configuration below applies to every member.
+[project]
+name = "indexnowkit-workspace"
+version = "0"
+description = "Development workspace of the indexnowkit Python packages (not published)"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=1.0",
+  "hypothesis>=6.100",
+  "mypy==2.3.1",   # the linters are pinned: a lowest-direct run must lint with the same rules (Dependabot bumps them)
+  "ruff==0.16.6",
+  "coverage[toml]>=7.6",
+  "jsonschema>=4.23",
+  "types-jsonschema>=4.23",
+  "twine>=6.0",
+]
+docs = [
+  "mkdocs-material>=9.5,<10",
+]
+
+[tool.uv]
+package = false
+default-groups = ["dev"]
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+indexnowkit = { workspace = true }
+
+# ---- ruff (spec 20 §3.16: E, F, I, UP, B, S, N, RUF; the ruff formatter) ----
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["var", "docs-site"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "S", "N", "RUF"]
+ignore = [
+  "RUF001", "RUF002", "RUF003",   # the docs and messages use typographic dashes and quotes on purpose
+]
+
+[tool.ruff.lint.per-file-ignores]
+"packages/*/tests/**" = ["S101", "S105", "S106", "S108"]   # assert, literal keys and /tmp paths are what tests are made of
+"bin/**" = ["S603", "S607"]                               # the scripts call the tools they wrap
+
+[tool.ruff.lint.isort]
+known-first-party = ["indexnowkit"]
+
+# ---- mypy --strict over the sources and the tests of every member (spec 26 §5.1) ----
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+files = ["packages/*/src", "packages/*/tests", "bin/lib/*.py"]
+mypy_path = "packages/indexnowkit/src"
+explicit_package_bases = true
+namespace_packages = true

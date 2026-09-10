@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Run the pipeline of .github/workflows/ci.yml in Docker: the lock is current, the environment is synced, ruff, mypy
+# --strict, pytest under coverage against the floor, the wheel and the sdist build without workspace sources, the wheel
+# installs into a clean environment and imports.
+# Usage: bin/ci [package] [flavour]   default: every package, highest.
+#   bin/ci indexnowkit                 PYTHON_VERSION=3.11 bin/ci indexnowkit lowest        bin/ci indexnowkit-django
+# Flavours: highest (the lock as committed) and lowest (--resolution lowest-direct; the lock is restored afterwards).
+# One run at a time: the runs share the workspace mount (.ruff_cache, .coverage, dist/).
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+flavour="${2:-highest}"
+ver="${PYTHON_VERSION:-3.12}"
+if [ -n "${1:-}" ]; then packages=("$1"); else packages=(); for d in packages/*/; do packages+=("$(basename "$d")"); done; fi
+for pkg in "${packages[@]}"; do
+    [ -d "packages/$pkg" ] || { echo "ci: no package packages/$pkg" >&2; exit 1; }
+done
+
+echo "::group::workspace / Python ${ver} / ${flavour}"
+case "$flavour" in
+    highest)
+        bin/uv lock --check
+        bin/uv sync --all-packages --all-groups --frozen
+        ;;
+    lowest)
+        # the oldest version of every direct dependency (spec 26 §5.2): uv re-locks in place, so the lock as it is
+        # goes to var/ first and comes back when the run ends, whatever the outcome
+        mkdir -p var && cp uv.lock var/uv.lock.highest
+        trap 'cp "$ROOT/var/uv.lock.highest" "$ROOT/uv.lock"' EXIT
+        bin/uv sync --all-packages --all-groups --resolution lowest-direct --upgrade
+        ;;
+    *) echo "ci: unknown flavour $flavour (highest|lowest)" >&2; exit 1 ;;
+esac
+bin/lint
+echo "::endgroup::"
+
+for pkg in "${packages[@]}"; do
+    echo "::group::${pkg} / Python ${ver} / ${flavour}"
+    bin/test "$pkg"
+    if [ -f "packages/$pkg/tests/coverage-floor.txt" ]; then
+        bin/coverage-floor "$pkg"
+    else
+        echo "coverage-floor: no floor recorded for $pkg yet (packages/$pkg/tests/coverage-floor.txt); record the CI number with --write"
+    fi
+    if grep -q '<!-- config-table:start -->' "packages/$pkg/docs/configuration.md" 2>/dev/null; then
+        bin/config-table "$pkg" --check
+    fi
+    bin/build "$pkg"
+    echo "::endgroup::"
+done

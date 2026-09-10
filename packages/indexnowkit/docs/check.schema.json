@@ -1,0 +1,47 @@
+{
+    "$schema": "https://json-schema.org/draft-07/schema",
+    "$id": "https://github.com/indexnowkit/spec/blob/main/check.schema.json",
+    "title": "indexnow check --json",
+    "description": "The report of the check command of every indexnowkit adapter (indexnow:check --json, php yii indexnow/check --json). `status` is the worst level of the report; `--strict` changes the exit code, not the status. Items are in the order the command prints them; group by `host` on your side when you need a per-host view. Codes are the API (core docs/check-codes.md); messages are for humans and change between versions.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["status", "environment", "items"],
+    "properties": {
+        "status": {
+            "type": "string",
+            "enum": ["ok", "warning", "error"],
+            "description": "error when any item is an error, else warning when any item is a warning, else ok"
+        },
+        "environment": {
+            "type": ["string", "null"],
+            "description": "the configured `environment` (APP_ENV / INDEXNOW_ENV / the framework's environment), null when none is known or the configuration did not build"
+        },
+        "items": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["level", "code", "message", "host"],
+                "properties": {
+                    "level": {
+                        "type": "string",
+                        "enum": ["ok", "warning", "error"]
+                    },
+                    "code": {
+                        "type": ["string", "null"],
+                        "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+                        "description": "the stable identifier of the check (key_file.status, debounce.store, queue.connection; config.invalid when the configuration did not build); null only for an application check that names none"
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "the human line, as printed without --json; not API"
+                    },
+                    "host": {
+                        "type": ["string", "null"],
+                        "description": "the host the line is about (key file, probe), null for global lines"
+                    }
+                }
+            }
+        }
+    }
+}

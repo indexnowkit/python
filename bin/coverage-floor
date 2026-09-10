@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Compare the line coverage of a package (the .coverage data bin/test left in packages/<package>) with the floor recorded
+# in packages/<package>/tests/coverage-floor.txt; below the floor is a failure. The floor is the coverage measured when
+# it was set: raising it is a normal commit, lowering it is a separate commit with the reason. The reference measurement
+# is the CI job on Python 3.12 with the committed lock: a local run may count a statement differently (a patch version,
+# the flavour left by the last bin/ci), so record the CI number, not the local one.
+#
+# Usage: bin/coverage-floor <package>            compare, exit 1 below the floor
+#        bin/coverage-floor <package> --write    record the current coverage as the floor
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+pkg="${1:?usage: bin/coverage-floor <package> [--write]}"
+mode="${2:-}"
+floor_file="$ROOT/packages/$pkg/tests/coverage-floor.txt"
+[ -f "$ROOT/packages/$pkg/.coverage" ] || { echo "coverage-floor: no coverage data in packages/$pkg (run bin/test $pkg first)" >&2; exit 1; }
+current="$("$ROOT/bin/uv" -C "packages/$pkg" run --frozen coverage report --format=total --precision=2 | tr -d '[:space:]')"
+[[ "$current" =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "coverage-floor: unexpected coverage total '$current'" >&2; exit 1; }
+if [ "$mode" = "--write" ]; then
+    printf '%s\n' "$current" > "$floor_file"
+    echo "coverage-floor: $pkg floor set to ${current}% in packages/$pkg/tests/coverage-floor.txt"
+    exit 0
+fi
+[ -f "$floor_file" ] || { echo "coverage-floor: no floor recorded for $pkg; run with --write first" >&2; exit 1; }
+floor="$(tr -d '[:space:]' < "$floor_file")"
+if awk -v c="$current" -v f="$floor" 'BEGIN { exit !(c + 0 < f + 0) }'; then
+    echo "coverage-floor: $pkg line coverage ${current}% is below the floor ${floor}%" >&2
+    exit 1
+fi
+echo "coverage-floor: $pkg line coverage ${current}% (floor ${floor}%)"

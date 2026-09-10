@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Run the Python of the development image (no local Python needed) in the environment uv keeps for that version.
+# Usage: bin/python [-v 3.11] [-C packages/indexnowkit] <args>   PYTHON_VERSION sets the default version (3.12).
+#   bin/python -c 'import indexnowkit'          bin/python -C packages/indexnowkit -m pytest tests -k normalizer
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=lib/image.sh
+source "$ROOT/bin/lib/image.sh"
+VER="${PYTHON_VERSION:-3.12}"
+DIR="."
+while :; do
+    case "${1:-}" in
+        -v) VER="$2"; shift 2 ;;
+        -C) DIR="$2"; shift 2 ;;
+        *) break ;;
+    esac
+done
+run_in_image "$VER" "$DIR" uv run --frozen python "$@"

@@ -1,0 +1,30 @@
+name: Feature request
+description: Something an indexnowkit package should do
+labels: [enhancement]
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      options:
+        - indexnowkit (core, CLI)
+        - indexnowkit-django
+        - indexnowkit-sqlalchemy
+        - indexnowkit-fastapi
+        - indexnowkit-flask
+        - indexnowkit-wagtail
+        - a new adapter (say which framework)
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: The situation
+      description: What you are trying to do and where the package stops you. A concrete site, model or deployment beats an abstract wish.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: Configuration key, rule option, command flag, extension point. If a decorator or a `Check` of your own already solves it, say so — the docs may just need an example.

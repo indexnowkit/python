@@ -1,0 +1,59 @@
+name: Docs site
+
+# Builds https://indexnowkit.dev/python from the package READMEs and docs (bin/docs-collect + MkDocs Material),
+# checks the links (lychee: internal links are strict, external ones tolerate rate limiting) and deploys to GitHub
+# Pages on main. Pages must be enabled once in the repository settings with "GitHub Actions" as the source; the
+# organization site indexnowkit.github.io serves it under /python/ the way it serves /php/.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: '3.12'
+          enable-cache: true
+      - run: uv sync --only-group docs
+      - name: Collect the pages
+        run: uv run --no-sync python bin/docs-collect
+      - name: Build, strict (a broken internal link fails)
+        run: uv run --no-sync mkdocs build --strict -f docs-site/mkdocs.yml -d site
+      # internal links are already guaranteed by the strict build; lychee checks the external ones over the collected sources
+      - name: Check external links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --no-progress --scheme https --scheme http --accept 200..=299,403,429 --max-retries 2 --timeout 20
+            --exclude '^https://pypi\.org' --exclude 'example\.(com|de|net|ru)' --exclude 'localhost'
+            --exclude 'yandex\.com/indexnow' --exclude 'indexnow\.org/indexnow$' --exclude 'indexnowkit\.github\.io'
+            'docs-site/docs/**/*.md'
+          fail: true
+      - uses: actions/upload-pages-artifact@v5
+        with: { path: docs-site/site }
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

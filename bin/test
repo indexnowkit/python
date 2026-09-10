@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# pytest of one package under coverage, from the package directory (its pyproject.toml holds the pytest and coverage
+# settings). The coverage data lands in packages/<package>/.coverage for bin/coverage-floor.
+# Usage: bin/test <package> [pytest args]     bin/test indexnowkit -k normalizer -x
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+pkg="${1:?usage: bin/test <package> [pytest args]}"
+shift
+[ -d "$ROOT/packages/$pkg" ] || { echo "test: no package packages/$pkg" >&2; exit 1; }
+exec "$ROOT/bin/uv" -C "packages/$pkg" run --frozen coverage run -m pytest "$@"

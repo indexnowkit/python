@@ -1,0 +1,80 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "indexnowkit"
+dynamic = ["version"]
+description = "IndexNow for Python: protocol client, batching, debounce, retries, the @indexnow rule model, sitemap, pre-flight, history, CLI — the core of the indexnowkit family"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "Igor Pinchuk", email = "i.pinchuk.work@gmail.com" }]
+keywords = ["indexnow", "seo", "bing", "yandex", "naver", "seznam", "sitemap", "search"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Web Environment",
+  "Environment :: Console",
+  "Framework :: AsyncIO",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
+  "Topic :: Internet :: WWW/HTTP",
+  "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+  "Topic :: Internet :: WWW/HTTP :: Site Management",
+  "Typing :: Typed",
+]
+# zero dependencies by design (spec 20 §2.4): urllib, xml.etree, sqlite3, argparse, html.parser are the stack
+dependencies = []
+
+[project.optional-dependencies]
+httpx = ["httpx>=0.28,<2"]
+testing = ["pytest>=8.3"]
+
+[project.scripts]
+indexnowkit = "indexnowkit.cli:main"
+
+[project.urls]
+Homepage = "https://indexnowkit.dev/python/"
+Documentation = "https://indexnowkit.dev/python/indexnowkit/"
+Source = "https://github.com/indexnowkit/python"
+Issues = "https://github.com/indexnowkit/python/issues"
+Changelog = "https://github.com/indexnowkit/python/blob/main/packages/indexnowkit/CHANGELOG.md"
+Specification = "https://github.com/indexnowkit/spec"
+
+[tool.hatch.version]
+path = "src/indexnowkit/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/indexnowkit"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/indexnowkit", "docs", "README.md", "README.ru.md", "CHANGELOG.md", "LICENSE", "pyproject.toml"]
+
+# ---- pytest and coverage, read from this directory by bin/test ----
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+xfail_strict = true
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["indexnowkit"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+precision = 2
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "@overload",
+  "raise NotImplementedError",
+  "^\\s*\\.\\.\\.$",
+]

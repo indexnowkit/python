@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+"""Collect the READMEs and docs of the packages into docs-site/docs/ for MkDocs, rewriting links so the site is
+self-contained, and generate mkdocs.yml (nav) plus llms.txt / llms-full.txt — the Python counterpart of the PHP
+script (spec 26 §1: the same layout under https://indexnowkit.dev/python/).
+
+Layout of the site: getting started per framework (the READMEs), then the core reference pages, then each package's
+docs. Every package README becomes <pkg>/index.md; every docs/<f>.md becomes <pkg>/<f>.md. Links: `](docs/x.md)` ->
+`](x.md)`; absolute GitHub links into packages/<pkg>/(docs/)<f>.md -> site-relative; `tree/main/packages/<pkg>` -> the
+package index. Packages of PACKAGES that do not exist yet (the adapters of the later steps of wave P) are skipped.
+
+Usage: bin/docs-collect            (writes docs-site/docs, docs-site/mkdocs.yml)
+"""
+
+import os
+import re
+import shutil
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SITE = os.path.join(ROOT, "docs-site")
+OUT = os.path.join(SITE, "docs")
+BASE_URL = "https://indexnowkit.dev/python/"
+REPO = "https://github.com/indexnowkit/python"
+PACKAGES = ["indexnowkit", "indexnowkit-django", "indexnowkit-sqlalchemy", "indexnowkit-fastapi", "indexnowkit-flask", "indexnowkit-wagtail"]
+TITLES = {
+    "indexnowkit": "Core (indexnowkit)",
+    "indexnowkit-django": "Django",
+    "indexnowkit-sqlalchemy": "SQLAlchemy",
+    "indexnowkit-fastapi": "FastAPI",
+    "indexnowkit-flask": "Flask",
+    "indexnowkit-wagtail": "Wagtail",
+}
+
+# Section -> list of (title, "pkg/file.md") shown in the nav in this order; the rest of a package's docs follow under Packages.
+GETTING_STARTED = [
+    ("Django", "indexnowkit-django/index.md"),
+    ("SQLAlchemy", "indexnowkit-sqlalchemy/index.md"),
+    ("FastAPI", "indexnowkit-fastapi/index.md"),
+    ("Flask", "indexnowkit-flask/index.md"),
+    ("Wagtail", "indexnowkit-wagtail/index.md"),
+    ("Any site (CLI, cron, CI) and plain Python", "indexnowkit/index.md"),
+]
+REFERENCE = [
+    ("Rules reference", "indexnowkit/rules.md"),
+    ("Configuration", "indexnowkit/configuration.md"),
+    ("Check codes", "indexnowkit/check-codes.md"),
+    ("Operations", "indexnowkit/operations.md"),
+    ("Retries and queues", "indexnowkit/retries-and-queues.md"),
+    ("CLI", "indexnowkit/cli.md"),
+    ("Testing", "indexnowkit/testing.md"),
+    ("Writing an adapter", "indexnowkit/adapters.md"),
+    ("Compatibility (core)", "indexnowkit/bc.md"),
+    ("Supported versions", "indexnowkit/compatibility.md"),
+]
+
+
+def url_of(key):
+    """The site URL of a page: <pkg>/index.md is <pkg>/, <pkg>/x.md is <pkg>/x/, the front page is the root."""
+    if key == "index.md":
+        return BASE_URL
+    path = key[:-3]
+    if path.endswith("/index"):
+        path = path[: -len("index")]
+    else:
+        path += "/"
+    return BASE_URL + path
+
+
+def title_of(path):
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("# "):
+                return line[2:].strip().replace("`", "")
+    return os.path.basename(path)
+
+
+def rewrite(text, pkg, in_docs):
+    """Rewrite links of a page of <pkg> (in_docs: the page lives in docs/, i.e. next to its siblings)."""
+    # absolute links into the repository
+    text = re.sub(
+        r"\]\(https://github\.com/indexnowkit/python/blob/main/packages/([a-z0-9-]+)/docs/([A-Za-z0-9._-]+\.md)(#[^)]*)?\)",
+        lambda m: "](%s/%s%s)" % ("../" + m.group(1) if m.group(1) != pkg else ".", m.group(2), m.group(3) or ""),
+        text,
+    )
+    text = re.sub(
+        r"\]\(https://github\.com/indexnowkit/python/blob/main/packages/([a-z0-9-]+)/README\.md(#[^)]*)?\)",
+        lambda m: "](%s/index.md%s)" % ("../" + m.group(1) if m.group(1) != pkg else ".", m.group(2) or ""),
+        text,
+    )
+    text = re.sub(
+        r"\]\(https://github\.com/indexnowkit/python/tree/main/packages/([a-z0-9-]+)/?\)",
+        lambda m: "](%s/index.md)" % ("../" + m.group(1) if m.group(1) != pkg else "."),
+        text,
+    )
+    # relative links inside the package
+    if in_docs:
+        text = re.sub(r"\]\(\.\./README\.md(#[^)]*)?\)", lambda m: "](index.md%s)" % (m.group(1) or ""), text)
+        text = re.sub(r"\]\(\.\./CHANGELOG\.md\)", "](%s/blob/main/packages/%s/CHANGELOG.md)" % (REPO, pkg), text)
+    else:
+        text = re.sub(r"\]\(docs/([A-Za-z0-9._-]+\.md)(#[^)]*)?\)", lambda m: "](%s%s)" % (m.group(1), m.group(2) or ""), text)
+        for f in ["CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md", "LICENSE", "README.ru.md"]:
+            text = text.replace("](%s)" % f, "](%s/blob/main/packages/%s/%s)" % (REPO, pkg, f))
+    # HTML comments used by tests are noise on the site
+    text = re.sub(r"<!-- /?test[^>]*-->\n?", "", text)
+    text = re.sub(r"<!-- /?config-table:[a-z]+ -->\n?", "", text)
+    return text
+
+
+def main():
+    packages = [p for p in PACKAGES if os.path.isfile(os.path.join(ROOT, "packages", p, "README.md"))]
+    if os.path.isdir(OUT):
+        shutil.rmtree(OUT)
+    os.makedirs(OUT)
+    pages = {}  # "pkg/file.md" -> title
+    package_docs = {p: [] for p in packages}
+    for pkg in packages:
+        src = os.path.join(ROOT, "packages", pkg)
+        os.makedirs(os.path.join(OUT, pkg))
+        readme = os.path.join(src, "README.md")
+        with open(readme, encoding="utf-8") as f:
+            text = rewrite(f.read(), pkg, False)
+        with open(os.path.join(OUT, pkg, "index.md"), "w", encoding="utf-8") as f:
+            f.write(text)
+        pages["%s/index.md" % pkg] = title_of(readme)
+        docs = os.path.join(src, "docs")
+        if os.path.isdir(docs):
+            for name in sorted(os.listdir(docs)):
+                if not name.endswith(".md"):
+                    continue
+                with open(os.path.join(docs, name), encoding="utf-8") as f:
+                    text = rewrite(f.read(), pkg, True)
+                with open(os.path.join(OUT, pkg, name), "w", encoding="utf-8") as f:
+                    f.write(text)
+                key = "%s/%s" % (pkg, name)
+                pages[key] = title_of(os.path.join(docs, name))
+                if not name.endswith(".ru.md"):  # translations are pages, not nav entries
+                    package_docs[pkg].append(key)
+
+    # front page
+    with open(os.path.join(OUT, "index.md"), "w", encoding="utf-8") as f:
+        f.write(FRONT)
+    pages["index.md"] = "indexnowkit for Python"
+
+    # nav: only the pages that exist (the adapters arrive step by step)
+    getting_started = [(t, p) for t, p in GETTING_STARTED if p in pages]
+    reference = [(t, p) for t, p in REFERENCE if p in pages]
+    nav = ["  - Home: index.md"]
+    if getting_started:
+        nav += ["  - Getting started:"] + ["    - %s: %s" % (t, p) for t, p in getting_started]
+    if reference:
+        nav += ["  - Reference:"] + ["    - %s: %s" % (t, p) for t, p in reference]
+    nav += ["  - Packages:"]
+    for pkg in packages:
+        nav.append("    - %s:" % TITLES[pkg])
+        nav.append("      - Overview: %s/index.md" % pkg)
+        for key in package_docs[pkg]:
+            if key in dict(reference).values():
+                continue
+            nav.append("      - %s: %s" % (pages[key].replace(":", " -"), key))
+    with open(os.path.join(SITE, "mkdocs.template.yml"), encoding="utf-8") as f:
+        template = f.read()
+    with open(os.path.join(SITE, "mkdocs.yml"), "w", encoding="utf-8") as f:
+        f.write(template.replace("#NAV#", "\n".join(nav)))
+
+    # llms.txt (index) and llms-full.txt (everything)
+    order = ["index.md"] + [p for _, p in getting_started] + [p for _, p in reference]
+    order += [k for pkg in packages for k in ["%s/index.md" % pkg] + package_docs[pkg] if k not in order]
+    order += sorted(k for k in pages if k.endswith(".ru.md"))
+    with open(os.path.join(OUT, "llms.txt"), "w", encoding="utf-8") as f:
+        f.write(
+            "# indexnowkit for Python\n\n> IndexNow for Python: a framework-agnostic core (protocol client, batching, debounce, "
+            "retries, the @indexnow rule model, sitemap, pre-flight, history, CLI) plus Django, SQLAlchemy, FastAPI, Flask and "
+            "Wagtail adapters. Declare public pages on the model with @indexnow; submissions leave after the transaction commits, "
+            "debounced and batched.\n\n"
+        )
+        f.write("PyPI: %s. Source and issues: %s\n\n## Pages\n\n" % (", ".join(packages), REPO))
+        for key in order:
+            f.write("- [%s](%s)\n" % (pages[key], url_of(key)))
+        f.write("\n## Full text\n\n- [llms-full.txt](%sllms-full.txt)\n" % BASE_URL)
+    with open(os.path.join(OUT, "llms-full.txt"), "w", encoding="utf-8") as f:
+        for key in order:
+            with open(os.path.join(OUT, key), encoding="utf-8") as page:
+                f.write("<!-- %s -->\n" % url_of(key))
+                f.write(page.read().rstrip("\n") + "\n\n")
+    print("docs-collect: %d pages -> %s" % (len(pages), OUT))
+
+
+FRONT = """# indexnowkit for Python
+
+Tell search engines (Bing, Yandex, Naver, Seznam, Yep, and the other participants of the IndexNow registry) about
+new, changed and deleted pages the moment a model is committed. One decorator on the model, one key, done.
+Google does not participate; IndexNow is a notification, not indexing.
+
+| Package | Framework | Install |
+|---|---|---|
+| [Core](indexnowkit/index.md) | plain Python, any WSGI/ASGI application, the `indexnowkit` command line for any site (cron, CI) | `pip install indexnowkit` |
+| Django | Django 5.2 LTS, 6.0, 6.1 | `pip install indexnowkit-django` (wave P step 2) |
+| SQLAlchemy | SQLAlchemy 2.0, 2.1 | `pip install indexnowkit-sqlalchemy` (wave P step 3) |
+| FastAPI | FastAPI / Starlette | `pip install indexnowkit-fastapi` (wave P step 4) |
+| Flask | Flask 3 | `pip install indexnowkit-flask` (wave P, second phase) |
+| Wagtail | Wagtail 6.3+ | `pip install indexnowkit-wagtail` (wave P, second phase) |
+
+The PHP family of the same specification lives at [indexnowkit.dev/php](https://indexnowkit.dev/php/).
+Machine-readable: [llms.txt](llms.txt), [llms-full.txt](llms-full.txt).
+Issues and pull requests: [github.com/indexnowkit/python](https://github.com/indexnowkit/python).
+"""
+
+if __name__ == "__main__":
+    sys.exit(main())

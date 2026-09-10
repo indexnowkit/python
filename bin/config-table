@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Regenerate (or, with --check, verify) the generated section of packages/<package>/docs/configuration.md from the code:
+# bin/lib/config_table.py reads Config.OPTIONS and the defaults of the package's Config and renders the rows between
+# the `<!-- config-table:start -->` / `<!-- config-table:end -->` markers. Needs the workspace synced (bin/ci once).
+# Usage: bin/config-table <package> [--check]
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+pkg="${1:?usage: bin/config-table <package> [--check]}"
+shift
+exec "$ROOT/bin/uv" run --frozen python bin/lib/config_table.py "$pkg" "$@"

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# ruff (lint and format check) and mypy --strict over every member of the workspace, the way ci.yml runs them.
+# Usage: bin/lint [--fix]     --fix lets ruff fix and format in place
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+if [ "${1:-}" = "--fix" ]; then
+    bin/uv run --frozen ruff check --fix
+    bin/uv run --frozen ruff format
+else
+    bin/uv run --frozen ruff check
+    bin/uv run --frozen ruff format --check
+fi
+bin/uv run --frozen mypy

@@ -1,0 +1,68 @@
+{
+    "$schema": "https://json-schema.org/draft-07/schema",
+    "$id": "https://github.com/indexnowkit/spec/blob/main/status.schema.json",
+    "title": "indexnow status --json",
+    "description": "The read-only status of an indexnowkit adapter (indexnow:status --json, php yii indexnow/status --json): switches, dispatch, debounce, the 403 counter per configured host, the last successful submission and the history size. Members are only added, never removed or renamed, in a minor.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["enabled", "dry_run", "environment", "dispatch", "debounce", "engines", "forbidden_escalation", "hosts", "history", "core"],
+    "properties": {
+        "enabled": {"type": "boolean"},
+        "dry_run": {"type": "boolean"},
+        "environment": {"type": ["string", "null"]},
+        "dispatch": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["mode", "adapter"],
+            "properties": {
+                "mode": {"type": "string", "description": "the effective dispatch mode: sync, queue, messenger, none"},
+                "adapter": {"type": "object", "additionalProperties": {"type": ["string", "number", "boolean", "null"]}, "description": "what the adapter knows: queue, connection, transport, …"}
+            }
+        },
+        "debounce": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["per_url", "store"],
+            "properties": {
+                "per_url": {"type": "integer", "description": "seconds; 0 = off"},
+                "store": {"type": "string", "description": "the debounce store as the adapter describes it"}
+            }
+        },
+        "engines": {"type": "array", "items": {"type": "string"}},
+        "forbidden_escalation": {"type": "integer", "description": "logging.forbidden_escalation: consecutive 403s before the critical line"},
+        "hosts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["host", "forbidden", "escalated"],
+                "properties": {
+                    "host": {"type": "string"},
+                    "forbidden": {"type": "integer", "description": "consecutive 403s of the current streak (0 when the shared counter is unknown)"},
+                    "escalated": {"type": "boolean", "description": "the critical line was written for this streak"}
+                }
+            }
+        },
+        "history": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["store", "records", "last_success", "error"],
+            "properties": {
+                "store": {"type": ["string", "null"], "enum": ["history", "custom", null], "description": "null = history.store is null; history = a store of indexnowkit/history; custom = another SubmissionStoreInterface"},
+                "records": {"type": ["integer", "null"], "description": "records kept; null for a custom store or when the store failed"},
+                "last_success": {
+                    "type": ["object", "null"],
+                    "additionalProperties": false,
+                    "required": ["at", "urls", "engine"],
+                    "properties": {
+                        "at": {"type": "string", "description": "ISO 8601"},
+                        "urls": {"type": "integer"},
+                        "engine": {"type": "string"}
+                    }
+                },
+                "error": {"type": ["string", "null"], "description": "the exception of a store that failed (a missing table)"}
+            }
+        },
+        "core": {"type": "string", "description": "the indexnowkit/core version"}
+    }
+}

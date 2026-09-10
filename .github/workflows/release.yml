@@ -1,0 +1,90 @@
+name: Release
+
+# A tag <short>@<version> (core@0.1.0, django@0.1.0 — bin/tag of the workspace pushes it) builds the distribution of
+# that package without the workspace sources, publishes it to PyPI by trusted publishing (no token: the pending
+# publisher of the project names this repository, this file and the environment pypi-<short> — one environment per
+# package, PyPI accepts one pending publisher per repository/workflow/environment triple, spec 26 §6) and creates
+# the GitHub release from the package CHANGELOG section (bin/release-notes). The short name maps to the distribution
+# the way bin/lib/package.sh does: core -> indexnowkit, <x> -> indexnowkit-<x>.
+
+on:
+  push:
+    tags: ['*@*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      short: ${{ steps.names.outputs.short }}
+      dist: ${{ steps.names.outputs.dist }}
+      version: ${{ steps.names.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: names
+        name: Resolve the package of the tag
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          short="${tag%@*}"
+          version="${tag#*@}"
+          case "$short" in
+            core) dist=indexnowkit ;;
+            *) dist="indexnowkit-${short}" ;;
+          esac
+          [ -d "packages/$dist" ] || { echo "::error::no package packages/$dist for tag $tag"; exit 1; }
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::the version of tag $tag is not x.y.z"; exit 1; }
+          module="$(echo "$dist" | tr - _)"
+          grep -Eq "^__version__ = \"${version//./\\.}\"$" "packages/$dist/src/$module/__init__.py" || { echo "::error::packages/$dist/src/$module/__init__.py does not say __version__ = \"$version\""; exit 1; }
+          { echo "short=$short"; echo "dist=$dist"; echo "version=$version"; } >> "$GITHUB_OUTPUT"
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: '3.12'
+      - name: Build
+        run: uv build --package ${{ steps.names.outputs.dist }} --no-sources --out-dir dist
+      - run: uv run --only-group dev twine check --strict dist/*
+      - name: The artifacts carry the version of the tag
+        run: ls dist/ | grep -F -- "-${{ steps.names.outputs.version }}" || { echo "::error::dist/ holds no ${{ steps.names.outputs.version }} artifact"; ls dist/; exit 1; }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi-${{ needs.build.outputs.short }}
+      url: https://pypi.org/project/${{ needs.build.outputs.dist }}/${{ needs.build.outputs.version }}/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+
+  release:
+    needs: [build, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - name: GitHub release from the CHANGELOG section
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bin/release-notes "${{ needs.build.outputs.short }}" "${{ needs.build.outputs.version }}" > notes.md
+          gh release create "${GITHUB_REF_NAME}" -R "${GITHUB_REPOSITORY}" -t "${{ needs.build.outputs.dist }} ${{ needs.build.outputs.version }}" --verify-tag -F notes.md dist/*

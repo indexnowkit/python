@@ -1,0 +1,13 @@
+/var/
+/.venv/
+/dist/
+/packages/*/dist/
+/packages/*/.coverage
+/packages/*/.coverage.*
+/packages/*/coverage.xml
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
