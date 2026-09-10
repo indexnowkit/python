@@ -41,7 +41,7 @@ jobs:
           args: >-
             --no-progress --scheme https --scheme http --accept 200..=299,403,429 --max-retries 2 --timeout 20
             --exclude '^https://pypi\.org' --exclude 'example\.(com|de|net|ru)' --exclude 'localhost'
-            --exclude 'yandex\.com/indexnow' --exclude 'indexnow\.org/indexnow$' --exclude 'indexnowkit\.github\.io'
+            --exclude 'yandex\.com/indexnow' --exclude 'indexnow\.org/indexnow$' --exclude 'indexnowkit\.github\.io' --exclude 'indexnowkit\.dev/python'
             'docs-site/docs/**/*.md'
           fail: true
       - uses: actions/upload-pages-artifact@v5
