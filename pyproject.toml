@@ -46,7 +46,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"packages/*/tests/**" = ["S101", "S105", "S106", "S108"]   # assert, literal keys and /tmp paths are what tests are made of
+"packages/*/tests/**" = ["S101", "S105", "S106", "S108", "RUF043"]   # assert, literal keys, /tmp paths and dotted option names in match= are what tests are made of
 "bin/**" = ["S603", "S607"]                               # the scripts call the tools they wrap
 
 [tool.ruff.lint.isort]
